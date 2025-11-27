@@ -1,27 +1,77 @@
-FROM tencentos/tencentos_server31_mini:20240220
+# Python 多阶段构建：builder 阶段
+FROM tencentos/tencentos4-minimal:4.4-v20251020 AS python-builder
+ARG PY_VERSION=3.13.1
+RUN yum update -y && yum groupinstall -y "Development Tools" \
+    && yum install -y epel-release \
+    && yum install -y libffi-devel zlib-devel bzip2-devel openssl-devel readline-devel ncurses-devel sqlite-devel xz-devel \
+    && yum clean all \
+    && curl -fsSL https://www.python.org/ftp/python/${PY_VERSION}/Python-${PY_VERSION}.tgz -o Python-${PY_VERSION}.tgz \
+    && curl -fsSL https://www.python.org/ftp/python/${PY_VERSION}/Python-${PY_VERSION}.tgz.asc -o Python-${PY_VERSION}.tgz.asc \
+    && gpg --batch --quiet --keyserver hkps://keys.openpgp.org --recv-keys 7169605F62C751356D394A68EDC8423E7D74467 \
+    && gpg --batch --quiet --verify Python-${PY_VERSION}.tgz.asc Python-${PY_VERSION}.tgz \
+    && tar -xzf Python-${PY_VERSION}.tgz \
+    && cd Python-${PY_VERSION} \
+    && ./configure --enable-optimizations \
+    && make -j$(nproc) \
+    && make altinstall \
+    && cd / \
+    && rm -rf Python-${PY_VERSION} Python-${PY_VERSION}.tgz Python-${PY_VERSION}.tgz.asc \
+    && yum groupremove -y "Development Tools" \
+    && yum autoremove -y \
+    && yum clean all
 
-ENV LV_BRANCH='release-1.3/neovim-0.9' \
-    GO_VERSION=1.22.0 \
-    PATH=$PATH:/usr/local/go/bin:/usr/local/nvim/bin:/root/.local/bin:/root/.local/bin
+# 主镜像阶段
+FROM tencentos/tencentos4-minimal:4.4-v20251020
+ARG GO_VERSION=1.25.3
+ARG PY_VERSION=3.13.1
+ARG NODE_VERSION=24.12.0
 
+ENV GO_VERSION=${GO_VERSION} \
+    PY_VERSION=${PY_VERSION} \
+    NODE_VERSION=${NODE_VERSION} \
+    PATH=/usr/local/go/bin:/usr/local/node/bin:$PATH
+
+# 安装基础工具与编译环境（不含 Python）
 RUN yum update -y && yum upgrade -y \
     && yum install -y epel-release \
     && yum install -y curl sudo gnupg git \
-    make cmake gcc gcc-c++ python3 python3-pip \
-    python3-setuptools python3-wheel python3-devel zsh tmux \
-    tar man xz gzip unzip \
-    the_silver_searcher fd-find \
-    && rm -rf /var/cache/yum
+    make cmake gcc gcc-c++ \
+    zsh tmux tar man xz gzip unzip \
+    _silver_searcher fd-find \
+    && yum clean all
 
-RUN curl -LO https://dl.k8s.io/release/v1.29.2/bin/linux/amd64/kubectl \
-    && chmod +x ./kubectl \
-    && mv ./kubectl /usr/local/bin/kubectl
+# 安装 Go
+RUN GO_ARCH=amd64 \
+    && case "$(uname -m)" in \
+        aarch64|arm64) GO_ARCH=arm64 ;; \
+    esac \
+    && curl -fsSL https://golang.org/dl/go${GO_VERSION}.linux-${GO_ARCH}.tar.gz -o go.tar.gz \
+    && curl -fsSL https://golang.org/dl/go${GO_VERSION}.linux-${GO_ARCH}.tar.gz.sha256 -o go.tar.gz.sha256 \
+    && sha256sum -c go.tar.gz.sha256 \
+    && tar -C /usr/local -xzf go.tar.gz \
+    && rm go.tar.gz go.tar.gz.sha256
 
-RUN curl -LO https://github.com/Hex-Techs/hexctl/releases/download/V0.1.7/hexctl_linux \
-    && chmod +x ./hexctl_linux \
-    && mv ./hexctl_linux /usr/local/bin/hexctl
+# 安装 Node.js 24 LTS
+RUN NODE_ARCH=x64 \
+    && case "$(uname -m)" in \
+        aarch64|arm64) NODE_ARCH=arm64 ;; \
+    esac \
+    && curl -fsSL https://nodejs.org/dist/v${NODE_VERSION}/node-v${NODE_VERSION}-linux-${NODE_ARCH}.tar.xz -o node.tar.xz \
+    && curl -fsSL https://nodejs.org/dist/v${NODE_VERSION}/SHASUMS256.txt -o SHASUMS256.txt \
+    && grep "node-v${NODE_VERSION}-linux-${NODE_ARCH}.tar.xz" SHASUMS256.txt | sha256sum -c - \
+    && mkdir -p /usr/local/node \
+    && tar -C /usr/local/node --strip-components=1 -xJf node.tar.xz \
+    && rm node.tar.xz SHASUMS256.txt
 
-RUN curl -LO https://golang.org/dl/go${GO_VERSION}.linux-amd64.tar.gz \
-    && tar xvzf go${GO_VERSION}.linux-amd64.tar.gz -C /usr/local
+# 从 builder 阶段复制 Python
+COPY --from=python-builder /usr/local/bin/python3.13 /usr/local/bin/
+COPY --from=python-builder /usr/local/lib/python3.13 /usr/local/lib/
+
+# OCI Labels
+LABEL org.opencontainers.image.title="devcontainer-tencentos4" \
+      org.opencontainers.image.description="Development container with Go, Python, Node.js and C++17" \
+      org.opencontainers.image.version.go="${GO_VERSION}" \
+      org.opencontainers.image.version.python="${PY_VERSION}" \
+      org.opencontainers.image.version.node="${NODE_VERSION}"
 
 WORKDIR /root
