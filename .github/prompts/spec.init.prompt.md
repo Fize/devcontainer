@@ -2,7 +2,6 @@
 description: 初始化项目分析 - 读取项目代码，深度分析功能、技术栈和结构
 agent: agent
 name: spec.init
-model: Claude Opus 4.5 (Preview) (copilot)
 ---
 
 ## 工作内容

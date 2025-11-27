@@ -5,11 +5,21 @@
 ## 原子任务列表（按依赖顺序）
 
 1. 更新 TencentOS 基础镜像（tencentos4-minimal）
+- 描述：将 `Dockerfile-tencentos` 基础镜像替换为 `tencentos/tencentos4-minimal`。
+- 验收：基础镜像变更生效，构建初始阶段通过。
 
 2. Debian：移除不需要组件与旧 Node.js
+- 描述：从 `Dockerfile-debian` 中移除 kubectl、hexctl、Neovim 及其配置，并移除旧版 Node.js 安装。
+- 验收：构建日志中不再出现上述组件与旧 Node.js 安装步骤。
+
+3. TencentOS：移除不需要组件
+- 描述：从 `Dockerfile-tencentos` 中移除 kubectl、hexctl、Neovim 及其配置。
+- 验收：构建日志中不再出现上述组件安装与配置步骤。
+
 4. Debian：安装 make 与基础工具
 - 描述：确保 `make`、`git`、`cmake`、`zsh`、`tmux` 等基础工具可用。
- - 状态：进行中
+- 验收：容器内 `make --version` 可用，其他工具正常执行。
+
 5. TencentOS：安装 make 与基础工具
 - 描述：同上，适配 `yum/dnf`。
 - 验收：容器内 `make --version` 可用，其他工具正常执行。
