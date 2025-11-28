@@ -1,6 +1,13 @@
+# PHONY targets
 .PHONY: build build-multi tag inspect-labels push run clean help
 
+# 优先使用 Makefile 中的默认 LANG，避免环境变量（如 shell 的 LANG=en_US.UTF-8）覆盖
+ifeq ($(origin LANG), environment)
+override LANG := go
+endif
+
 # 变量定义
+# 默认语言（若通过命令行或环境未指定则使用）
 LANG ?= go
 GO_VER ?= 1.25.3
 PY_VER ?= 3.13.1
@@ -30,29 +37,35 @@ else
 endif
 IMAGE_TAG = $(REPO):$(SHORT_LANG)$(VERSION)
 
-# 单平台构建
+# 单平台构建（不使用 buildx）
 build:
 	@echo "Building $(SHORT_LANG) image version $(VERSION)..."
-	docker buildx build \
+	docker build \
 		--build-arg $(shell echo $(LANG) | tr '[:lower:]' '[:upper:]')_VERSION=$(VERSION) \
 		$(if $(PLATFORM),--platform=$(PLATFORM),) \
 		-f $(DOCKERFILE) \
 		-t devcontainer-$(LANG):local \
 		-t $(IMAGE_TAG) \
-		$(if $(PLATFORM),--load,) \
 		.
 
-# 多平台构建并推送
+# 多平台构建并推送（不使用 buildx）
+# 说明：使用传统 docker build 分别为每个平台构建并推送带平台后缀的镜像标签。
+
 build-multi:
-	@echo "Building multi-platform $(SHORT_LANG) image..."
-	docker buildx build \
-		--build-arg $(shell echo $(LANG) | tr '[:lower:]' '[:upper:]')_VERSION=$(VERSION) \
-		--platform=$(PLATFORMS) \
-		-f $(DOCKERFILE) \
-		-t $(IMAGE_TAG) \
-		-t $(REPO):$(SHORT_LANG)-latest \
-		--push \
-		.
+	@echo "Building multi-platform $(SHORT_LANG) image without buildx..."
+	@for p in $(shell echo $(PLATFORMS) | tr ',' ' '); do \
+		tag_platform=$$(echo $$p | tr '/' '-'); \
+		echo "Building for platform $$p (tag suffix: $$tag_platform)"; \
+		docker build \
+			--build-arg $(shell echo $(LANG) | tr '[:lower:]' '[:upper:]')_VERSION=$(VERSION) \
+			--platform=$$p \
+			-f $(DOCKERFILE) \
+			-t $(REPO):$(SHORT_LANG)$(VERSION)-$$tag_platform \
+			-t $(REPO):$(SHORT_LANG)-latest-$$tag_platform \
+			. ; \
+		docker push $(REPO):$(SHORT_LANG)$(VERSION)-$$tag_platform || true; \
+		docker push $(REPO):$(SHORT_LANG)-latest-$$tag_platform || true; \
+	done
 
 # 推送单平台镜像
 push: build
