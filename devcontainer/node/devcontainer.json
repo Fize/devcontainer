@@ -17,11 +17,17 @@
 
   "mounts": [
     "source=${localEnv:HOME}/.gitconfig,target=/root/.gitconfig,type=bind,consistency=cached",
-    "source=${localEnv:HOME}/.npmrc,target=/root/.npmrc,type=bind,consistency=cached"
+    "source=${localEnv:HOME}/.npmrc,target=/root/.npmrc,type=bind,consistency=cached",
+    "source=/var/run/docker.sock,target=/var/run/docker.sock,type=bind",
+    "source=${localEnv:HOME}/.docker/config.json,target=/root/.docker/config.json,type=bind,readonly"
   ],
 
   "remoteUser": "root",
   "workspaceFolder": "/workspace",
+
+  "containerEnv": {
+    "DOCKER_BUILDKIT": "1"
+  },
 
   "postCreateCommand": "node --version && npm --version",
 
