@@ -1,0 +1,29 @@
+{
+  "name": "C++ Development Container",
+  "image": "malzaharguo/devcontainer:cpp17",
+
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-vscode.cpptools",
+        "ms-vscode.cmake-tools"
+      ],
+      "settings": {
+        "C_Cpp.default.cppStandard": "c++17",
+        "C_Cpp.default.compilerPath": "/usr/bin/g++",
+        "cmake.configureOnOpen": true
+      }
+    }
+  },
+
+  "mounts": [
+    "source=${localEnv:HOME}/.gitconfig,target=/root/.gitconfig,type=bind,consistency=cached"
+  ],
+
+  "remoteUser": "root",
+  "workspaceFolder": "/workspace",
+
+  "postCreateCommand": "g++ --version",
+
+  "features": {}
+}

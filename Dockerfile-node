@@ -1,0 +1,39 @@
+FROM tencentos/tencentos4-minimal:4.4-v20251020
+
+ARG NODE_VERSION=24.11.1
+
+ENV NODE_VERSION=${NODE_VERSION} \
+    PATH=/usr/local/node/bin:$PATH
+
+# 安装最小化系统包
+RUN dnf update -y \
+    && dnf install -y --setopt=install_weak_deps=False \
+        ca-certificates \
+        curl \
+        git \
+        tar \
+        xz \
+    && dnf clean all \
+    && rm -rf /var/cache/dnf/*
+
+# 安装 Node.js
+RUN NODE_ARCH=x64 \
+    && case "$(uname -m)" in \
+        aarch64|arm64) NODE_ARCH=arm64 ;; \
+    esac \
+    && curl -fsSL https://nodejs.org/dist/v${NODE_VERSION}/node-v${NODE_VERSION}-linux-${NODE_ARCH}.tar.xz -o node.tar.xz \
+    && curl -fsSL https://nodejs.org/dist/v${NODE_VERSION}/SHASUMS256.txt -o SHASUMS256.txt \
+    && EXPECTED_HASH=$(grep "node-v${NODE_VERSION}-linux-${NODE_ARCH}.tar.xz" SHASUMS256.txt | cut -d' ' -f1) \
+    && echo "${EXPECTED_HASH}  node.tar.xz" | sha256sum -c - \
+    && mkdir -p /usr/local/node \
+    && tar -C /usr/local/node --strip-components=1 -xJf node.tar.xz \
+    && rm -f node.tar.xz SHASUMS256.txt
+
+# OCI Labels
+LABEL org.opencontainers.image.title="devcontainer-node" \
+      org.opencontainers.image.description="Node.js development container for TencentOS 4" \
+      org.opencontainers.image.version.node="${NODE_VERSION}" \
+      org.opencontainers.image.base.name="tencentos/tencentos4-minimal:4.4-v20251020"
+
+WORKDIR /workspace
+CMD ["/bin/bash"]

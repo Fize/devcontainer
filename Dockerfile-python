@@ -1,0 +1,65 @@
+# Python 编译阶段
+FROM tencentos/tencentos4-minimal:4.4-v20251020 AS python-builder
+
+ARG PY_VERSION=3.13.1
+
+RUN dnf update -y \
+    && dnf install -y --setopt=install_weak_deps=False \
+        gcc gcc-c++ make gawk \
+        libffi-devel zlib-devel bzip2-devel \
+        openssl-devel readline-devel sqlite-devel \
+        xz-devel ncurses-devel \
+        curl ca-certificates \
+    && dnf clean all
+
+# Python 3.13.1 的 MD5 校验和（来自 python.org 官方）
+ARG PY_MD5=6820ac52d77af870f795dabc64583234
+
+RUN curl -fsSL https://www.python.org/ftp/python/${PY_VERSION}/Python-${PY_VERSION}.tgz -o Python-${PY_VERSION}.tgz \
+    && echo "${PY_MD5}  Python-${PY_VERSION}.tgz" | md5sum -c - \
+    && tar -xzf Python-${PY_VERSION}.tgz \
+    && cd Python-${PY_VERSION} \
+    && ./configure --enable-optimizations --prefix=/usr/local \
+    && make -j$(nproc) \
+    && make altinstall \
+    && cd / \
+    && rm -rf Python-${PY_VERSION} Python-${PY_VERSION}.tgz
+
+# 最终镜像
+FROM tencentos/tencentos4-minimal:4.4-v20251020
+
+ARG PY_VERSION=3.13.1
+
+ENV PY_VERSION=${PY_VERSION} \
+    PATH=/usr/local/bin:$PATH
+
+# 安装运行时依赖（不含编译工具）
+RUN dnf update -y \
+    && dnf install -y --setopt=install_weak_deps=False \
+        ca-certificates \
+        curl \
+        git \
+        libffi openssl-libs readline sqlite \
+        zlib bzip2-libs xz-libs ncurses-libs \
+    && dnf clean all \
+    && rm -rf /var/cache/dnf/*
+
+# 从 builder 复制 Python
+COPY --from=python-builder /usr/local/bin/python3.13 /usr/local/bin/
+COPY --from=python-builder /usr/local/bin/pip3.13 /usr/local/bin/
+COPY --from=python-builder /usr/local/lib/python3.13 /usr/local/lib/python3.13
+
+# 创建软链接
+RUN ln -s /usr/local/bin/python3.13 /usr/local/bin/python3 \
+    && ln -s /usr/local/bin/python3.13 /usr/local/bin/python \
+    && ln -s /usr/local/bin/pip3.13 /usr/local/bin/pip3 \
+    && ln -s /usr/local/bin/pip3.13 /usr/local/bin/pip
+
+# OCI Labels
+LABEL org.opencontainers.image.title="devcontainer-python" \
+      org.opencontainers.image.description="Python development container for TencentOS 4" \
+      org.opencontainers.image.version.python="${PY_VERSION}" \
+      org.opencontainers.image.base.name="tencentos/tencentos4-minimal:4.4-v20251020"
+
+WORKDIR /workspace
+CMD ["/bin/bash"]

@@ -1,0 +1,28 @@
+FROM tencentos/tencentos4-minimal:4.4-v20251020
+
+ENV CXX_STANDARD=17
+
+# 安装 C++ 开发工具链
+RUN dnf update -y \
+    && dnf install -y --setopt=install_weak_deps=False \
+        gcc gcc-c++ \
+        make cmake \
+        git \
+        ca-certificates \
+    && dnf clean all \
+    && rm -rf /var/cache/dnf/*
+
+# 验证 C++17 支持
+RUN echo 'int main(){ return 0; }' | g++ -std=c++17 -x c++ - -o /tmp/test \
+    && /tmp/test \
+    && rm /tmp/test \
+    && echo "C++17 support verified"
+
+# OCI Labels
+LABEL org.opencontainers.image.title="devcontainer-cpp" \
+      org.opencontainers.image.description="C++17 development container for TencentOS 4" \
+      org.opencontainers.image.version.cpp="17" \
+      org.opencontainers.image.base.name="tencentos/tencentos4-minimal:4.4-v20251020"
+
+WORKDIR /workspace
+CMD ["/bin/bash"]
